@@ -1,7 +1,12 @@
 import os
 import yaml
 import random
+import os
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+import base64
 
+from typing import Generator
 from loguru import logger
 from models import Account, Config
 
@@ -12,28 +17,55 @@ def get_accounts() -> Account:
         logger.error(f"File <<{accounts_path}>> does not exist")
         exit(1)
 
-    with open(accounts_path, "r") as f:
-        accounts = f.readlines()
+    decryption_key = input("Enter the decryption key (32 bytes for AES-256): ").encode()
+    iv = input("Enter the initialization vector (16 bytes for AES-CBC): ").encode()
 
-        if not accounts:
-            logger.error(f"File <<{accounts_path}>> is empty")
+    if len(decryption_key) != 32:
+        logger.error("Decryption key must be 32 bytes for AES-256.")
+        exit(1)
+    if len(iv) != 16:
+        logger.error("Initialization vector (IV) must be 16 bytes for AES-CBC.")
+        exit(1)
+
+    with open(accounts_path, "rb") as f:  # Open in binary mode
+        encrypted_content = f.read()
+    try:
+        decrypted_content = decrypt_aes_256_cbc(base64.b64decode(encrypted_content), decryption_key, iv)
+    except Exception as e:
+        logger.error(f"Failed to decrypt file content: {e}")
+        exit(1)
+
+    lines = decrypted_content.splitlines()
+    if not lines:
+        logger.error(f"File <<{accounts_path}>> is empty after decryption")
+        exit(1)
+
+    for account in lines:
+        values = account.split("|")
+        if len(values) == 3:
+            yield Account(
+                auth_token=values[0].strip(),
+                pk_or_mnemonic=values[1].strip(),
+                proxy=values[2].strip(),
+            )
+
+        else:
+            logger.error(
+                f"Account <<{account}>> is not in correct format | Need to be in format: <<auth_token|mnemonic/pv_key|proxy>>"
+            )
             exit(1)
 
-        for account in accounts:
-            values = account.split("|")
-            if len(values) == 3:
-                yield Account(
-                    auth_token=values[0].strip(),
-                    pk_or_mnemonic=values[1].strip(),
-                    proxy=values[2].strip(),
-                )
 
-            else:
-                logger.error(
-                    f"Account <<{account}>> is not in correct format | Need to be in format: <<auth_token|mnemonic/pv_key|proxy>>"
-                )
-                exit(1)
+def decrypt_aes_256_cbc(encrypted_content: bytes, key: bytes, iv: bytes) -> str:
+    backend = default_backend()
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=backend)
+    decryptor = cipher.decryptor()
+    decrypted_data = decryptor.update(encrypted_content) + decryptor.finalize()
 
+    padding_length = decrypted_data[-1]
+    decrypted_data = decrypted_data[:-padding_length]
+
+    return decrypted_data.decode('utf-8')
 
 def load_config() -> Config:
     settings_path = os.path.join(os.getcwd(), "config", "settings.yaml")

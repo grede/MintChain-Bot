@@ -11,4 +11,5 @@ PyYAML~=6.0.1
 urllib3~=2.2.1
 inquirer~=3.2.4
 colorama~=0.4.6
+cryptography==41.0.0
 better_proxy
