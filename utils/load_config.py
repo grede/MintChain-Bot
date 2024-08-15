@@ -5,6 +5,7 @@ import os
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import base64
+import getpass
 
 from typing import Generator
 from loguru import logger
@@ -17,8 +18,8 @@ def get_accounts() -> Account:
         logger.error(f"File <<{accounts_path}>> does not exist")
         exit(1)
 
-    decryption_key = input("Enter the decryption key (32 bytes for AES-256): ").encode()
-    iv = input("Enter the initialization vector (16 bytes for AES-CBC): ").encode()
+    decryption_key = getpass.getpass("Enter the decryption key (32 bytes for AES-256): ").encode()
+    iv = getpass.getpass("Enter the initialization vector (16 bytes for AES-CBC): ").encode()
 
     if len(decryption_key) != 32:
         logger.error("Decryption key must be 32 bytes for AES-256.")
